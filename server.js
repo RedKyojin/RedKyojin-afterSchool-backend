@@ -3,7 +3,7 @@ const express = require("express");
 const app = express();
 const PORT = 3000;
 
-// Middlewere
+//-----------------------------------------Middlewere----------------------------------------
 // Logs requests
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.url}`);
@@ -13,7 +13,7 @@ app.use((req, res, next) => {
 // Allow server to read JSON request bodies
 app.use(express.json());
 
-// Data
+//-----------------------------------------Data----------------------------------------
 const lessons = [
   { id: 1, subject: "Maths", location: "M5", price: 20, space: 9 },
   { id: 2, subject: "Science", location: "S2", price: 20, space: 12 },
@@ -23,7 +23,7 @@ const lessons = [
 const orders = []; //Temporary array to hold JSON Post from postman.
 
 
-// Route
+//-----------------------------------------Routes----------------------------------------
 app.get("/", (req, res) => {
   res.send("Hello");
 });
@@ -58,9 +58,37 @@ app.post("/orders", (req, res) => {
 });
 
 
+// Update any attribute of a lesson by ID
+app.put("/lessons/:id", (req, res) => {
+
+  // Get lesson id from the URL
+  const lessonId = Number(req.params.id);
+
+  // Find the lesson
+  const lesson = lessons.find(l => l.id === lessonId);
+
+  if (!lesson) {
+    return res.status(404).json({ message: "Lesson not found" });
+  }
+
+  // Body contains the fields to update
+  const updates = req.body || {};
+
+  if ("id" in updates) {
+    return res.status(400).json({ message: "Cannot update lesson id" });
+  }
+
+  Object.assign(lesson, updates);
+
+  // Returns updated lesson
+  res.json({
+    message: "Lesson updated",
+    lesson
+  });
+});
 
 
-// Server
+//-----------------------------------------Server----------------------------------------
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
