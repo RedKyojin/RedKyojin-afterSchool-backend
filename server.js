@@ -1,12 +1,12 @@
 // Imports
 require("dotenv").config();
 const express = require("express");
-const { MongoClient } = require("mongodb");
+const { MongoClient, ObjectId } = require("mongodb");
 
 const app = express();
 const PORT = 3000;
 
-//-----------------------------------------Middlewere----------------------------------------
+//-----------------------------------------Middleware----------------------------------------
 // Logs requests
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.url}`);
@@ -16,82 +16,107 @@ app.use((req, res, next) => {
 // Allow server to read JSON request bodies
 app.use(express.json());
 
-//-----------------------------------------Data----------------------------------------
-const lessons = [
-  { id: 1, subject: "Maths", location: "M5", price: 20, space: 9 },
-  { id: 2, subject: "Science", location: "S2", price: 20, space: 12 },
-  { id: 3, subject: "Chess", location: "R6", price: 25, space: 13 },
-  { id: 4, subject: "Dodgeball", location: "GYM", price: 35, space: 3 },
-];
-const orders = []; //Temporary array to hold JSON Post from postman.
+//-----------------------------------------MongoDB----------------------------------------
+const client = new MongoClient(process.env.MONGO_URI);
 
 
+async function connectDB() {
+  try {
+    await client.connect();
+    const db = client.db(process.env.DB_NAME || "afterSchool");
+    console.log("Connected to MongoDB Atlas (connection test only)");
+  } catch (err) {
+    console.error("MongoDB connection failed:", err);
+  }
+}
 //-----------------------------------------Routes----------------------------------------
 app.get("/", (req, res) => {
   res.send("Hello");
 });
 
-// Returns lessons as JSON
-app.get("/lessons", (req, res) => {
-  res.json(lessons);
-});
-
-
-// Save a new order
-app.post("/orders", (req, res) => {
-  const { name, phone, lessonIDs } = req.body;
-
-  if (!name || !phone || !lessonIDs || !Array.isArray(lessonIDs)) {
-    return res.status(400).json({ message: "Invalid order data" });
+// Returns lessons from MongoDB as JSON
+app.get("/lessons", async (req, res) => {
+  try {
+    const lessons = await lessonsCollection.find({}).toArray();
+    res.json(lessons);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch lessons" });
   }
-
-  const newOrder = {
-    id: orders.length + 1,
-    name,
-    phone,
-    lessonIDs
-  };
-
-  orders.push(newOrder); //Sends Post to Array.
-
-  res.status(201).json({
-    message: "Order saved", //Express sends to postman.
-    order: newOrder
-  });
 });
 
+// Save a new order into MongoDB
+app.post("/orders", async (req, res) => {
+  try {
+    const { name, phone, lessonIDs } = req.body || {};
+
+    // Basic validation
+    if (!name || !phone || !Array.isArray(lessonIDs) || lessonIDs.length === 0) {
+      return res.status(400).json({ message: "Invalid order data" });
+    }
+
+    const newOrder = {
+      name,
+      phone,
+      lessonIDs,
+      createdAt: new Date()
+    };
+
+    const result = await ordersCollection.insertOne(newOrder);
+
+    res.status(201).json({
+      message: "Order saved",
+      order: { _id: result.insertedId, ...newOrder }
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to save order" });
+  }
+});
 
 // Update any attribute of a lesson by ID
-app.put("/lessons/:id", (req, res) => {
+// Supports either numeric "id" (your frontend style) OR MongoDB "_id"
+app.put("/lessons/:id", async (req, res) => {
+  try {
+    const idParam = req.params.id;
+    const updates = req.body || {};
 
-  // Get lesson id from the URL
-  const lessonId = Number(req.params.id);
+    if ("id" in updates || "_id" in updates) {
+      return res.status(400).json({ message: "Cannot update lesson id" });
+    }
 
-  // Find the lesson
-  const lesson = lessons.find(l => l.id === lessonId);
+    // Build a filter that works whether you pass numeric id or Mongo ObjectId
+    const filter = {};
+    const numericId = Number(idParam);
 
-  if (!lesson) {
-    return res.status(404).json({ message: "Lesson not found" });
+    if (!Number.isNaN(numericId) && String(numericId) === idParam) {
+      filter.id = numericId; // match documents that have { id: 1, 2, 3... }
+    } else if (ObjectId.isValid(idParam)) {
+      filter._id = new ObjectId(idParam); // match documents by Mongo _id
+    } else {
+      return res.status(400).json({ message: "Invalid lesson id" });
+    }
+
+    const result = await lessonsCollection.findOneAndUpdate(
+      filter,
+      { $set: updates },
+      { returnDocument: "after" }
+    );
+
+    if (!result.value) {
+      return res.status(404).json({ message: "Lesson not found" });
+    }
+
+    res.json({
+      message: "Lesson updated",
+      lesson: result.value
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to update lesson" });
   }
-
-  // Body contains the fields to update
-  const updates = req.body || {};
-
-  if ("id" in updates) {
-    return res.status(400).json({ message: "Cannot update lesson id" });
-  }
-
-  Object.assign(lesson, updates);
-
-  // Returns updated lesson
-  res.json({
-    message: "Lesson updated",
-    lesson
-  });
 });
 
-
 //-----------------------------------------Server----------------------------------------
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+connectDB().finally(() => {
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
 });
