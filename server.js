@@ -5,6 +5,8 @@ const { MongoClient, ObjectId } = require("mongodb");
 
 const app = express();
 const PORT = 3000;
+const cors = require("cors");
+app.use(cors());
 
 //-----------------------------------------Middleware----------------------------------------
 // Logs requests
