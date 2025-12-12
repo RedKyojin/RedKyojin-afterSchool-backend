@@ -17,18 +17,19 @@ app.use((req, res, next) => {
 app.use(express.json());
 
 //-----------------------------------------MongoDB----------------------------------------
-const client = new MongoClient(process.env.MONGO_URI);
+const client = new MongoClient(process.env.MONGODB_URI);
 
+let lessonsCollection;
+let ordersCollection;
 
 async function connectDB() {
-  try {
-    await client.connect();
-    const db = client.db(process.env.DB_NAME || "afterSchool");
-    console.log("Connected to MongoDB Atlas (connection test only)");
-  } catch (err) {
-    console.error("MongoDB connection failed:", err);
-  }
+  await client.connect();
+  const db = client.db(process.env.DB_NAME || "afterSchool");
+  lessonsCollection = db.collection("lesson");
+  ordersCollection = db.collection("order");
+  console.log("Connected to MongoDB Atlas");
 }
+
 //-----------------------------------------Routes----------------------------------------
 app.get("/", (req, res) => {
   res.send("Hello");
@@ -115,8 +116,13 @@ app.put("/lessons/:id", async (req, res) => {
 });
 
 //-----------------------------------------Server----------------------------------------
-connectDB().finally(() => {
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+connectDB()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("MongoDB connection failed:", err);
+    process.exit(1);
   });
-});
