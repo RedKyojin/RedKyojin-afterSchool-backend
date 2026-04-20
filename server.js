@@ -132,13 +132,13 @@ app.put("/lessons/:id", async (req, res) => {
       { returnDocument: "after" }
     );
 
-    if (!result.value) {
+    if (!result) {
       return res.status(404).json({ message: "Lesson not found" });
     }
 
     res.json({
       message: "Lesson updated",
-      lesson: toFrontendLesson(result.value)
+      lesson: toFrontendLesson(result)
     });
   } catch (err) {
     console.error(err);
