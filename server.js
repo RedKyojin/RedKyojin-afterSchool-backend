@@ -7,6 +7,8 @@ const { MongoClient, ObjectId } = require("mongodb");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const path = require("path");
+
 // ----------------------------------------- Middleware ----------------------------------------
 app.use(cors());
 
@@ -18,6 +20,13 @@ app.use((req, res, next) => {
 
 // Allow server to read JSON request bodies
 app.use(express.json());
+
+//Adding static file middleware
+// Adding images
+app.use("/images", express.static(path.join(__dirname, "public/images"))); //dirname gives you path
+app.use("/images", (req, res) => {
+  res.status(404).json({ message: "Image not found "});
+});
 
 // ----------------------------------------- MongoDB ----------------------------------------
 const client = new MongoClient(process.env.MONGODB_URI);
